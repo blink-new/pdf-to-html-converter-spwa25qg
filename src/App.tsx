@@ -7,17 +7,7 @@ import { Badge } from './components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { Separator } from './components/ui/separator'
 import { Upload, Download, FileText, Code, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
-
-interface ConversionResult {
-  html: string
-  images: string[]
-  styles: string
-  metadata: {
-    title: string
-    pageCount: number
-    fileSize: string
-  }
-}
+import { PDFConverter, ConversionResult, ConversionProgress } from './utils/pdfConverter'
 
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -64,94 +54,31 @@ function App() {
     }
   }, [handleFileSelect])
 
-  const simulateConversion = useCallback(async () => {
+  const [currentStep, setCurrentStep] = useState<string>('')
+
+  const convertPDF = useCallback(async () => {
     if (!selectedFile) return
 
     setIsConverting(true)
     setProgress(0)
     setError(null)
+    setCurrentStep('')
 
     try {
-      // Simulate conversion progress
-      const steps = ['Parsing PDF structure', 'Extracting text content', 'Processing images', 'Analyzing layout', 'Generating HTML', 'Applying styles', 'Finalizing output']
-      
-      for (let i = 0; i < steps.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 800))
-        setProgress(((i + 1) / steps.length) * 100)
-      }
+      const converter = new PDFConverter((progressInfo: ConversionProgress) => {
+        setProgress(progressInfo.progress)
+        setCurrentStep(progressInfo.step)
+      })
 
-      // Simulate conversion result
-      const result: ConversionResult = {
-        html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Converted PDF</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
-        .page { margin-bottom: 40px; }
-        .header { font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-        .content { font-size: 14px; }
-        .table { border-collapse: collapse; width: 100%; margin: 20px 0; }
-        .table th, .table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .table th { background-color: #f2f2f2; }
-        .image { max-width: 100%; height: auto; margin: 10px 0; }
-        .list { margin: 10px 0; }
-        .list li { margin: 5px 0; }
-    </style>
-</head>
-<body>
-    <div class="page">
-        <div class="header">Sample PDF Document</div>
-        <div class="content">
-            <p>This is a sample conversion showing how the PDF content would be converted to HTML with preserved styling and structure.</p>
-            
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Column 1</th>
-                        <th>Column 2</th>
-                        <th>Column 3</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Data 1</td>
-                        <td rowspan="2">Merged Cell</td>
-                        <td>Data 3</td>
-                    </tr>
-                    <tr>
-                        <td>Data 4</td>
-                        <td>Data 6</td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <ul class="list">
-                <li>List item 1</li>
-                <li>List item 2</li>
-                <li>List item 3</li>
-            </ul>
-        </div>
-    </div>
-</body>
-</html>`,
-        images: ['image1.png', 'image2.jpg'],
-        styles: 'body { font-family: Arial, sans-serif; margin: 40px; }',
-        metadata: {
-          title: selectedFile.name,
-          pageCount: 1,
-          fileSize: (selectedFile.size / 1024).toFixed(2) + ' KB'
-        }
-      }
-
+      const result = await converter.convertPDFToHTML(selectedFile)
       setConversionResult(result)
     } catch (err) {
-      setError('Conversion failed. Please try again.')
+      console.error('Conversion error:', err)
+      setError('Conversion failed. Please try again with a different PDF file.')
     } finally {
       setIsConverting(false)
       setProgress(0)
+      setCurrentStep('')
     }
   }, [selectedFile])
 
@@ -245,7 +172,9 @@ function App() {
                   <div className="mt-4 space-y-2">
                     <div className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span className="text-sm text-slate-600">Converting PDF...</span>
+                      <span className="text-sm text-slate-600">
+                        {currentStep || 'Converting PDF...'}
+                      </span>
                     </div>
                     <Progress value={progress} className="w-full" />
                   </div>
@@ -253,7 +182,7 @@ function App() {
 
                 <div className="mt-6 flex gap-3">
                   <Button
-                    onClick={simulateConversion}
+                    onClick={convertPDF}
                     disabled={!selectedFile || isConverting}
                     className="flex-1"
                   >
