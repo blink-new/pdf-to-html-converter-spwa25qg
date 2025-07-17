@@ -3,8 +3,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure PDF.js worker with proper fallback handling
 const configureWorker = () => {
   try {
-    // Use CDN worker URL as primary option for better reliability
-    const cdnWorkerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    // Use CDN worker URL that matches the installed version (5.3.93)
+    const cdnWorkerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.3.93/pdf.worker.min.mjs';
     pdfjsLib.GlobalWorkerOptions.workerSrc = cdnWorkerSrc;
     console.log('PDF.js worker configured with CDN:', cdnWorkerSrc);
   } catch (error) {
@@ -59,7 +59,23 @@ export class PDFConverter {
   }
 
   async convertPDFToHTML(file: File): Promise<ConversionResult> {
-    const fileBuffer = await file.arrayBuffer();
+    let originalBuffer: ArrayBuffer;
+    
+    try {
+      originalBuffer = await file.arrayBuffer();
+    } catch (error) {
+      console.error('Failed to read file as ArrayBuffer:', error);
+      throw new Error('Failed to read PDF file. Please check if the file is valid.');
+    }
+    
+    // Validate that the buffer is not detached
+    if (originalBuffer.byteLength === 0) {
+      throw new Error('PDF file appears to be empty or corrupted.');
+    }
+    
+    // Create a copy of the ArrayBuffer to prevent detachment issues
+    // This ensures the buffer remains accessible even if PDF.js transfers it to a worker
+    const fileBuffer = originalBuffer.slice(0);
     
     // Configure PDF.js with proper options and worker fallback
     const loadingTask = pdfjsLib.getDocument({
@@ -69,7 +85,7 @@ export class PDFConverter {
       // Add error handling for worker issues
       verbosity: 0, // Reduce verbose logging
       // Remove cMapUrl for now to avoid additional loading issues
-      standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+      standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.3.93/standard_fonts/'
     });
     
     let pdf;
@@ -79,8 +95,15 @@ export class PDFConverter {
       console.warn('PDF loading failed with worker, trying without worker:', error);
       
       // Retry without worker if worker fails
+      // Create another copy for the fallback attempt
+      // Validate the original buffer is still valid
+      if (originalBuffer.byteLength === 0) {
+        throw new Error('PDF buffer became invalid during processing. Please try again.');
+      }
+      
+      const fallbackBuffer = originalBuffer.slice(0);
       const fallbackTask = pdfjsLib.getDocument({
-        data: fileBuffer,
+        data: fallbackBuffer,
         disableWorker: true,
         verbosity: 0
       });
