@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set the worker source to use CDN
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+// Set the worker source to use the local worker file
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 export interface ConversionResult {
   html: string;
@@ -28,7 +28,15 @@ export class PDFConverter {
 
   async convertPDFToHTML(file: File): Promise<ConversionResult> {
     const fileBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument(fileBuffer).promise;
+    
+    // Configure PDF.js with proper options
+    const loadingTask = pdfjsLib.getDocument({
+      data: fileBuffer,
+      // Enable worker for better performance
+      disableWorker: false
+    });
+    
+    const pdf = await loadingTask.promise;
     
     this.reportProgress('Loading PDF document', 10);
     

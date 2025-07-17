@@ -74,7 +74,21 @@ function App() {
       setConversionResult(result)
     } catch (err) {
       console.error('Conversion error:', err)
-      setError('Conversion failed. Please try again with a different PDF file.')
+      
+      // Provide more specific error messages
+      let errorMessage = 'Conversion failed. Please try again with a different PDF file.'
+      
+      if (err instanceof Error) {
+        if (err.message.includes('API version') || err.message.includes('Worker version')) {
+          errorMessage = 'PDF.js version mismatch detected. Please refresh the page and try again.'
+        } else if (err.message.includes('Invalid PDF')) {
+          errorMessage = 'Invalid PDF file. Please check that the file is not corrupted.'
+        } else if (err.message.includes('password')) {
+          errorMessage = 'Password-protected PDFs are not supported. Please use an unlocked PDF.'
+        }
+      }
+      
+      setError(errorMessage)
     } finally {
       setIsConverting(false)
       setProgress(0)
