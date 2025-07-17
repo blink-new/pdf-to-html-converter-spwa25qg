@@ -3,14 +3,14 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure PDF.js worker with proper fallback handling
 const configureWorker = () => {
   try {
-    // Use a more reliable worker configuration
-    const workerSrc = new URL('/pdf.worker.min.mjs', import.meta.url).href;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-    console.log('PDF.js worker configured:', workerSrc);
+    // Use CDN worker URL as primary option for better reliability
+    const cdnWorkerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = cdnWorkerSrc;
+    console.log('PDF.js worker configured with CDN:', cdnWorkerSrc);
   } catch (error) {
-    console.warn('Could not configure PDF worker with URL constructor, trying fallback:', error);
+    console.warn('Could not configure PDF worker with CDN, trying local fallback:', error);
     
-    // Fallback to direct path
+    // Fallback to local path
     try {
       const fallbackWorkerSrc = `${window.location.origin}/pdf.worker.min.mjs`;
       pdfjsLib.GlobalWorkerOptions.workerSrc = fallbackWorkerSrc;
@@ -68,9 +68,8 @@ export class PDFConverter {
       disableWorker: false,
       // Add error handling for worker issues
       verbosity: 0, // Reduce verbose logging
-      // Add timeout to prevent hanging
-      cMapUrl: '/cmaps/',
-      cMapPacked: true
+      // Remove cMapUrl for now to avoid additional loading issues
+      standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
     });
     
     let pdf;
@@ -86,7 +85,12 @@ export class PDFConverter {
         verbosity: 0
       });
       
-      pdf = await fallbackTask.promise;
+      try {
+        pdf = await fallbackTask.promise;
+      } catch (fallbackError) {
+        console.error('PDF loading failed completely:', fallbackError);
+        throw new Error('Failed to load PDF document. Please check if the file is valid and try again.');
+      }
     }
     
     this.reportProgress('Loading PDF document', 10);
