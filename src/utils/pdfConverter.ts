@@ -1,7 +1,39 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set the worker source to use the local worker file
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// Configure PDF.js worker with proper fallback handling
+const configureWorker = () => {
+  try {
+    // Use a more reliable worker configuration
+    const workerSrc = new URL('/pdf.worker.min.mjs', import.meta.url).href;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+    console.log('PDF.js worker configured:', workerSrc);
+  } catch (error) {
+    console.warn('Could not configure PDF worker with URL constructor, trying fallback:', error);
+    
+    // Fallback to direct path
+    try {
+      const fallbackWorkerSrc = `${window.location.origin}/pdf.worker.min.mjs`;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = fallbackWorkerSrc;
+      console.log('PDF.js worker fallback configured:', fallbackWorkerSrc);
+    } catch (fallbackError) {
+      console.warn('Could not configure PDF worker fallback:', fallbackError);
+      // Disable worker completely if all configurations fail
+      pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+    }
+  }
+};
+
+// Initialize worker configuration when DOM is ready
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', configureWorker);
+  } else {
+    configureWorker();
+  }
+} else {
+  // Server-side rendering fallback
+  configureWorker();
+}
 
 export interface ConversionResult {
   html: string;
@@ -29,14 +61,33 @@ export class PDFConverter {
   async convertPDFToHTML(file: File): Promise<ConversionResult> {
     const fileBuffer = await file.arrayBuffer();
     
-    // Configure PDF.js with proper options
+    // Configure PDF.js with proper options and worker fallback
     const loadingTask = pdfjsLib.getDocument({
       data: fileBuffer,
-      // Enable worker for better performance
-      disableWorker: false
+      // Try to use worker, but allow fallback
+      disableWorker: false,
+      // Add error handling for worker issues
+      verbosity: 0, // Reduce verbose logging
+      // Add timeout to prevent hanging
+      cMapUrl: '/cmaps/',
+      cMapPacked: true
     });
     
-    const pdf = await loadingTask.promise;
+    let pdf;
+    try {
+      pdf = await loadingTask.promise;
+    } catch (error) {
+      console.warn('PDF loading failed with worker, trying without worker:', error);
+      
+      // Retry without worker if worker fails
+      const fallbackTask = pdfjsLib.getDocument({
+        data: fileBuffer,
+        disableWorker: true,
+        verbosity: 0
+      });
+      
+      pdf = await fallbackTask.promise;
+    }
     
     this.reportProgress('Loading PDF document', 10);
     

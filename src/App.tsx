@@ -81,10 +81,14 @@ function App() {
       if (err instanceof Error) {
         if (err.message.includes('API version') || err.message.includes('Worker version')) {
           errorMessage = 'PDF.js version mismatch detected. Please refresh the page and try again.'
+        } else if (err.message.includes('worker') || err.message.includes('Worker')) {
+          errorMessage = 'PDF worker loading failed. Falling back to main thread processing...'
         } else if (err.message.includes('Invalid PDF')) {
           errorMessage = 'Invalid PDF file. Please check that the file is not corrupted.'
         } else if (err.message.includes('password')) {
           errorMessage = 'Password-protected PDFs are not supported. Please use an unlocked PDF.'
+        } else if (err.message.includes('fetch')) {
+          errorMessage = 'Network error occurred. Please check your connection and try again.'
         }
       }
       
